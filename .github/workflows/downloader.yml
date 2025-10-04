@@ -6,16 +6,10 @@ on:
       urls:
         description: "URLs (uma por linha)"
         required: true
-        type: string
       audio_format:
-        description: "Formato de áudio (ex: mp3, m4a, opus)"
+        description: "Formato de áudio (ex: wav, mp3)"
         required: false
-        default: "mp3"
-        type: string
-      download_dir:
-        description: "Pasta de saída"
-        required: false
-        default: "downloads"
+        default: "wav"
         type: string
 
 jobs:
@@ -29,14 +23,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Gera config.json a partir dos inputs
       - name: Create config.json
         env:
           URLS: ${{ inputs.urls }}
           AUDIO_FORMAT: ${{ inputs.audio_format }}
-          DOWNLOAD_DIR: ${{ inputs.download_dir }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -46,13 +39,11 @@ jobs:
             .filter(Boolean);
 
           const dir = process.env.DOWNLOAD_DIR || 'downloads';
-          const fmt = process.env.AUDIO_FORMAT || 'mp3';
+          const fmt = process.env.AUDIO_FORMAT || 'wav';
 
-          // Força saída dentro do volume /downloads do container
           const cfg = {
             download_directory: dir,
             audio_format: fmt,
-            binary_args: `--audio-quality 0 --extract-audio --audio-format "${fmt}" -f "bestaudio" -P /downloads -o "%(title)s.%(ext)s"`,
             urls
           };
 
@@ -60,24 +51,13 @@ jobs:
           console.log('config.json:\n', JSON.stringify(cfg, null, 2));
           NODE
 
-      - name: Install deps (se preciso)
-        run: npm ci || true
-
       - name: Run downloader (node index.js)
         run: node index.js
-
-      # Cria ZIP explícito (o upload-artifact já comprime, mas aqui você controla o nome)
-      - name: Zip output
-        run: |
-          set -e
-          OUT="${{ inputs.download_dir }}"
-          test -d "$OUT" || (echo "Nada para zipar, pasta não existe"; exit 1)
-          zip -r "${OUT}.zip" "$OUT"
 
       - name: Upload artifact (zip)
         uses: actions/upload-artifact@v4
         with:
           name: downloads-${{ github.run_id }}
-          path: ${{ inputs.download_dir }}.zip
+          path: ${{ inputs.download_dir }}
           if-no-files-found: error
 
